@@ -25,6 +25,11 @@
       background: linear-gradient(180deg, rgba(255, 179, 71, .08), rgba(0, 0, 0, .96));
     }
 
+    .graph-wrap {
+      position: relative;
+      height: calc(100% - 44px);
+    }
+
     .header {
       padding: 10px 14px;
       display: flex;
@@ -40,11 +45,6 @@
       color: #ffd7a1;
     }
 
-    .meta {
-      font-size: 13px;
-      color: #d8b58a;
-    }
-
     .stats {
       font-size: 12px;
       color: #ffd7a1;
@@ -52,17 +52,47 @@
       opacity: 0.95;
     }
 
+    .graph-readout {
+      position: absolute;
+      bottom: clamp(56px, 7vh, 96px);
+      right: 18px;
+      z-index: 3;
+      text-align: right;
+      pointer-events: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 179, 71, .28);
+      background: rgba(6, 6, 6, .62);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    }
+
+    .graph-current {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: clamp(40px, 5.4vw, 88px);
+      line-height: 0.96;
+      color: #ffd7a1;
+      letter-spacing: -1px;
+      text-shadow: 0 0 12px rgba(255, 179, 71, .35);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .graph-meta {
+      margin-top: 6px;
+      font-size: 13px;
+      color: #d8b58a;
+    }
+
     .scale {
+      margin-top: 4px;
       font-size: 12px;
       color: #ffc57a;
       font-family: ui-monospace, monospace;
-      margin-top: 4px;
-      opacity: 0.9;
+      opacity: 0.95;
     }
 
     canvas {
       width: 100%;
-      height: calc(100% - 44px);
+      height: 100%;
       display: block;
       background: rgba(0, 0, 0, .84);
     }
@@ -74,12 +104,17 @@
     <div class="header">
       <div>
         <div class="title">OWON Live Graph</div>
-        <div class="meta" id="meta">Loading…</div>
+      </div>
+      <div class="stats" id="stats">Min: --- · Max: --- · Sample: 60s · Visible: 30s</div>
+    </div>
+    <div class="graph-wrap">
+      <div class="graph-readout">
+        <div class="graph-current" id="graphCurrent">---</div>
+        <div class="graph-meta" id="meta">Loading…</div>
         <div class="scale" id="scale">Scale: ---</div>
       </div>
-      <div class="stats" id="stats">Current: --- · Min: --- · Max: --- · Sample: 60s</div>
+      <canvas id="graph" width="1600" height="900"></canvas>
     </div>
-    <canvas id="graph" width="1600" height="900"></canvas>
   </div>
   <script>
     window.name = 'owon-graph';
@@ -320,11 +355,13 @@
       settings = s;
       meta.textContent = `${s.mode_label || '---'} • ${s.display_value || '---'} ${s.unit || ''}`;
       const current = s.graph_display_value != null ? s.graph_display_value : (s.display_value != null ? s.display_value : '---');
+      const graphCurrent = document.getElementById('graphCurrent');
+      if (graphCurrent) graphCurrent.textContent = `${current} ${s.unit || ''}`.trim();
       const min = s.graph_min != null ? Number(s.graph_min).toFixed(s.graph_decimals ?? 3) : '---';
       const max = s.graph_max != null ? Number(s.graph_max).toFixed(s.graph_decimals ?? 3) : '---';
       const sample = s.graph_window_seconds != null ? `${s.graph_window_seconds}s` : '---';
       const visible = s.graph_visible_seconds != null ? `${s.graph_visible_seconds}s` : '---';
-      stats.textContent = `Current: ${current} • Min: ${min} • Max: ${max} • Sample: ${sample} • Visible: ${visible}`;
+      stats.textContent = `Min: ${min} • Max: ${max} • Sample: ${sample} • Visible: ${visible}`;
       const scaleEl = document.getElementById('scale');
       if (scaleEl) {
         const axisBase = Math.max(Math.abs(s.graph_y_min ?? 0), Math.abs(s.graph_y_max ?? 0));
