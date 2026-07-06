@@ -2,157 +2,155 @@
 
 ![SquatchLab Logo](images/squatchlab-logo-128.png)
 
-Built by SquatchLab.
-Professional tools for electronics, repair, reverse engineering, and content creation.
+Local web app and OBS overlay toolkit for the OWON XDM1241 bench multimeter.
 
-------------------------------------------------------------------------
+The app connects over USB serial, polls live readings, and serves three browser views:
 
-A local web-based display and OBS overlay application for the **OWON
-XDM1241** bench multimeter.
-
-The application connects to the meter over USB serial, reads live
-measurements, and serves browser-based views for administration, OBS
-overlays, and live graphing.
+- Admin control panel
+- Transparent digital overlay
+- Live graph overlay
 
 ## Features
 
--   USB communication with the OWON XDM1241
--   Automatic meter discovery
--   Browser-based administration interface
--   OBS digital meter overlay
--   OBS live graph overlay
--   Manual OWON settings refresh (avoids slowing live updates)
--   Graph reset and configurable graph display ranges
--   Orange-on-black SquatchLab theme inspired by the OWON display
--   HTTP/JSON API for future integrations
+- OWON XDM1241 USB serial integration with auto-discovery
+- Browser admin UI with separate sections for Meter Controls, Overlay Settings, and Graph Settings
+- Live digital overlay view for OBS
+- Live graph view for OBS
+- Per-function graph settings and persisted state
+- Graph scale modes:
+  - Auto Window
+  - Fixed Range
+  - Manual (explicit min/max)
+- Graph time controls:
+  - Sample History slider: 0 to 300 seconds, step 5
+  - Visible Window slider: 0 to Sample History, step 5
+- Graph precision control
+- Center on Zero toggle (function-aware)
+- Reset Graph and Default Settings actions
+- Manual OWON settings refresh endpoint (separate from graph reset)
+- JSON API for integrations
 
-Supported measurement modes include:
+## Graph Behavior
 
--   Resistance
--   4-Wire Resistance
--   DC Voltage
--   AC Voltage
--   DC Current
--   AC Current
--   Continuity
--   Diode
--   Capacitance
--   Frequency
--   Period
--   Temperature (PT100)
+- Selected graph range is stored separately per meter function
+- Graph range controls do not change hardware range selection
+- Positive one-sided ranges are pinned with zero at the bottom
+- Center on Zero enforces symmetric negative/positive span
+- Zero axis label is always shown whenever zero is inside the visible Y range
+
+## Supported Modes
+
+- DC Voltage
+- AC Voltage
+- DC Current
+- AC Current
+- Resistance
+- 4-Wire Resistance
+- Continuity
+- Diode
+- Capacitance
+- Frequency
+- Period
+- Temperature (PT100)
+
+## Fixed Range Profiles (Current Defaults)
+
+- DC Voltage: 5V, 10V, 25V, 50V, 500V, 1000V
+- AC Voltage: 5V, 50V, 500V, 750V
+- Current: 500uA, 5mA, 50mA, 500mA
+- Resistance: 500ohm, 5kohm, 50kohm, 500kohm, 5Mohm, 50Mohm
+- Capacitance: 50nF, 500nF, 5uF, 50uF, 500uF, 5mF, 50mF
+
+Note: 10V and 25V DC entries are graph convenience ranges.
 
 ## Project Structure
 
-``` text
+```text
 .
 ├── images/
-│   ├── icon.png
-│   ├── qr-code-128.png
-│   ├── qr-code-256.png
-│   ├── squatchcode-logo-128.png
-│   ├── squatchcode-logo-1024.png
-│   ├── squatchcode-logo-and-name-240x99.png
-│   ├── squatchlab-logo-128.png
-│   ├── squatchlab-logo-1024.png
-│   └── squatchlab-logo-and-name-320x132.png
+├── templates/
+│   ├── admin.html
+│   ├── base.html
+│   ├── graph.html
+│   └── overlay.html
 ├── LICENSE
+├── owon_meter.py
 ├── owon_xdm1241_obs_app.py
-└── README.md
+├── README.md
+└── ui.py
 ```
 
 ## Requirements
 
--   Python 3.10+
--   OWON XDM1241
--   USB connection
--   Flask
--   pySerial
+- Python 3.10+
+- OWON XDM1241
+- USB connection
+- Flask
+- pySerial
 
 Install dependencies:
 
-``` bash
-pip3 install flask pyserial matplotlib
+```bash
+pip3 install flask pyserial
 ```
 
-## Running
+## Run
 
-Launch the application:
-
-``` bash
+```bash
 python3 owon_xdm1241_obs_app.py
 ```
 
-Or specify a serial port manually:
+Optional manual serial port:
 
-``` bash
+```bash
 python3 owon_xdm1241_obs_app.py --port /dev/cu.usbserial-2120
 ```
 
-The application automatically opens the administration page in your
-browser.
+Optional web port:
 
-## Web Interface
+```bash
+python3 owon_xdm1241_obs_app.py --web-port 5050
+```
 
-Default address:
+## Web Endpoints
 
-``` text
+Default base URL:
+
+```text
 http://127.0.0.1:5050
 ```
 
-  URL             Purpose
-  --------------- ----------------------------------
-  `/`             Administration and OWON controls
-  `/overlay`      OBS digital meter display
-  `/graph`        OBS live graph display
-  `/api/status`   Live JSON status
+- /: Admin UI
+- /overlay: OBS digital overlay
+- /graph: OBS graph overlay
+- /api/status: Live status JSON
+- /api/mode: Change function/mode
+- /api/overlay-settings: Save overlay settings
+- /api/graph-settings: Save graph settings
+- /api/reset-graph: Clear graph window
+- /api/reread-settings: Refresh OWON mode/range/speed
+- /api/command: Send direct command
+- /api/shutdown: Stop app
 
 ## OBS Integration
 
-Create Browser Sources using:
+Add Browser Sources pointing to:
 
-Digital Meter
-
-``` text
-http://127.0.0.1:5050/overlay
-```
-
-Live Graph
-
-``` text
-http://127.0.0.1:5050/graph
-```
-
-The overlays are designed with transparent backgrounds so they can be
-composited directly into OBS scenes.
-
-## Planned Documentation
-
-Additional documentation will cover:
-
--   Hardware setup
--   OBS scene examples
--   Supported SCPI commands
--   Custom display themes
--   Stream layouts
--   Troubleshooting
--   Future meter support
+- Digital overlay: http://127.0.0.1:5050/overlay
+- Live graph: http://127.0.0.1:5050/graph
 
 ## About SquatchLab
 
-SquatchLab develops practical tools for electronics repair, embedded
-systems, reverse engineering, hardware restoration, and technical
-content creation.
+SquatchLab develops practical tools for electronics repair, embedded systems, reverse engineering, and hardware-focused content creation.
 
 SquatchCode is the software and open-source development division of
 SquatchLab, providing source code, downloads, documentation, and
 tutorials.
 
-**Website**
-Scan the QR code or visit **https://squatchcode.com** for documentation, videos, downloads, and additional SquatchLab projects.
+Website: https://squatchcode.com
 
 ![SquatchCode QR Code](images/qr-code-256.png)
 
-
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+MIT License. See [LICENSE](LICENSE).

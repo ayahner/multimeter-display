@@ -1,0 +1,353 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>OWON Graph</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #090909;
+      color: #ffb347;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .frame {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(180deg, rgba(255, 179, 71, .08), rgba(0, 0, 0, .96));
+    }
+
+    .header {
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      background: rgba(10, 10, 10, .88);
+      border-bottom: 1px solid rgba(255, 179, 71, .2);
+    }
+
+    .title {
+      font-size: 16px;
+      color: #ffd7a1;
+    }
+
+    .meta {
+      font-size: 13px;
+      color: #d8b58a;
+    }
+
+    .stats {
+      font-size: 12px;
+      color: #ffd7a1;
+      font-family: ui-monospace, monospace;
+      opacity: 0.95;
+    }
+
+    .scale {
+      font-size: 12px;
+      color: #ffc57a;
+      font-family: ui-monospace, monospace;
+      margin-top: 4px;
+      opacity: 0.9;
+    }
+
+    canvas {
+      width: 100%;
+      height: calc(100% - 44px);
+      display: block;
+      background: rgba(0, 0, 0, .84);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="frame">
+    <div class="header">
+      <div>
+        <div class="title">OWON Live Graph</div>
+        <div class="meta" id="meta">Loading…</div>
+        <div class="scale" id="scale">Scale: ---</div>
+      </div>
+      <div class="stats" id="stats">Current: --- · Min: --- · Max: --- · Sample: 60s</div>
+    </div>
+    <canvas id="graph" width="1600" height="900"></canvas>
+  </div>
+  <script>
+    window.name = 'owon-graph';
+
+    const canvas = document.getElementById('graph');
+    const ctx = canvas.getContext('2d');
+    const meta = document.getElementById('meta');
+    const stats = document.getElementById('stats');
+    let data = [];
+    let settings = {};
+
+    function resize() {
+      const ratio = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      canvas.width = Math.floor(w * ratio);
+      canvas.height = Math.floor(h * ratio);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      draw();
+    }
+
+    function draw() {
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      const right = 18;
+      const top = 16;
+      const bottom = 32;
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(0,0,0,0.84)';
+      ctx.fillRect(0, 0, w, h);
+
+      if (!data.length) {
+        ctx.fillStyle = '#d8b58a';
+        ctx.font = '16px monospace';
+        ctx.fillText('No graph data yet', 20, 28);
+        return;
+      }
+
+      const points = data.filter((point) => {
+        const value = Array.isArray(point) ? point[1] : point?.value;
+        const elapsed = Array.isArray(point) ? point[0] : point?.elapsed;
+        return Number.isFinite(value) && Number.isFinite(elapsed);
+      });
+
+      if (!points.length) {
+        ctx.fillStyle = '#d8b58a';
+        ctx.font = '16px monospace';
+        ctx.fillText('No valid graph data yet', 20, 28);
+        return;
+      }
+
+      const lastTime = points[points.length - 1][0];
+      const windowSeconds = settings.graph_window_seconds || 60;
+      const visibleSeconds = Math.min(settings.graph_visible_seconds || 30, windowSeconds);
+      const displayStart = Math.max(0, lastTime - visibleSeconds);
+      const filtered = points.filter((point) => {
+        const elapsed = Array.isArray(point) ? point[0] : point.elapsed;
+        return elapsed >= displayStart;
+      });
+
+      if (!filtered.length) {
+        ctx.fillStyle = '#d8b58a';
+        ctx.font = '16px monospace';
+        ctx.fillText('No graph data in selected window', 20, 28);
+        return;
+      }
+
+      const firstTime = displayStart;
+      const span = Math.max(visibleSeconds, 1);
+      const values = filtered.map((point) => Array.isArray(point) ? point[1] : point.value);
+      let yMin = Number.isFinite(settings.graph_y_min) ? Number(settings.graph_y_min) : Math.min(...values);
+      let yMax = Number.isFinite(settings.graph_y_max) ? Number(settings.graph_y_max) : Math.max(...values);
+      // Normalize to ensure yMin <= yMax and add padding when equal
+      if (yMax < yMin) {
+        const tmp = yMax;
+        yMax = yMin;
+        yMin = tmp;
+      }
+      if (yMax === yMin) {
+        const pad = Math.max(Math.abs(yMin) * 0.1, 0.1);
+        yMin = yMin - pad;
+        yMax = yMax + pad;
+      }
+      const axisBase = Math.max(Math.abs(yMin), Math.abs(yMax));
+      let axisFactor = 1;
+      let axisSuffix = '';
+      if (axisBase >= 1e6) {
+        axisFactor = 1e6;
+        axisSuffix = 'M';
+      } else if (axisBase >= 1e3) {
+        axisFactor = 1e3;
+        axisSuffix = 'k';
+      }
+
+      const decimals = Number.isInteger(settings.graph_decimals) ? settings.graph_decimals : 3;
+      const tickCount = 5;
+      function formatAxisValue(value) {
+        const rounded = Number((value / axisFactor).toFixed(decimals));
+        return `${rounded.toFixed(decimals)}${axisSuffix}`;
+      }
+      const zeroInRange = yMin <= 0 && yMax >= 0;
+      const yTicks = [];
+      const tickLabels = [];
+      for (let i = 0; i <= tickCount; i++) {
+        const ratio = i / tickCount;
+        const value = yMax - ratio * (yMax - yMin);
+        yTicks.push(value);
+        tickLabels.push(formatAxisValue(value));
+      }
+      // Always force a visible zero label whenever zero is in view.
+      if (zeroInRange && !yTicks.some((value) => Math.abs(value) <= Math.max(1e-12, Math.abs(yMax - yMin) * 1e-6))) {
+        yTicks.push(0);
+        tickLabels.push(formatAxisValue(0));
+      }
+      ctx.font = '11px monospace';
+      const labelWidth = Math.max(...tickLabels.map((label) => ctx.measureText(label).width));
+      const left = Math.max(56, Math.ceil(labelWidth + 16));
+      const plotW = Math.max(1, w - left - right);
+      const plotH = Math.max(1, h - top - bottom);
+
+      ctx.strokeStyle = 'rgba(255,179,71,0.18)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 6; i++) {
+        const y = top + (i / 5) * plotH;
+        ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(left + plotW, y); ctx.stroke();
+      }
+      for (let i = 0; i < 6; i++) {
+        const x = left + (i / 5) * plotW;
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + plotH); ctx.stroke();
+      }
+
+      ctx.strokeStyle = 'rgba(255,179,71,0.35)';
+      ctx.beginPath();
+      ctx.moveTo(left, top);
+      ctx.lineTo(left, top + plotH);
+      ctx.lineTo(left + plotW, top + plotH);
+      ctx.stroke();
+
+      function yFromValue(value) {
+        const denom = (yMax - yMin) || 1;
+        const ratio = (value - yMin) / denom;
+        // Value increases upward: yMin at bottom, yMax at top.
+        return top + (1 - ratio) * plotH;
+      }
+
+      function colorForValue(value) {
+        if (value > yMax || value < yMin) {
+          return '#ff3b3b';
+        }
+        return '#ffb347';
+      }
+
+      function drawSegment(x1, y1, v1, x2, y2, v2) {
+        const bounds = [];
+        if (v1 !== v2) {
+          if ((v1 < yMin && v2 >= yMin) || (v1 >= yMin && v2 < yMin)) {
+            const ratio = (yMin - v1) / (v2 - v1);
+            bounds.push({ ratio, value: yMin });
+          }
+          if ((v1 < yMax && v2 >= yMax) || (v1 >= yMax && v2 < yMax)) {
+            const ratio = (yMax - v1) / (v2 - v1);
+            bounds.push({ ratio, value: yMax });
+          }
+        }
+        bounds.sort((a, b) => a.ratio - b.ratio);
+
+        const points = [{ x: x1, y: y1, v: v1 }];
+        for (const boundary of bounds) {
+          if (boundary.ratio <= 0 || boundary.ratio >= 1) continue;
+          points.push({
+            x: x1 + (x2 - x1) * boundary.ratio,
+            y: yFromValue(boundary.value),
+            v: boundary.value,
+          });
+        }
+        points.push({ x: x2, y: y2, v: v2 });
+
+        for (let i = 0; i < points.length - 1; i++) {
+          const a = points[i];
+          const b = points[i + 1];
+          const midValue = (a.v + b.v) / 2;
+          ctx.strokeStyle = colorForValue(midValue);
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+      }
+
+      ctx.lineWidth = 2.2;
+      filtered.forEach((point, index) => {
+        const elapsed = Array.isArray(point) ? point[0] : point.elapsed;
+        const value = Array.isArray(point) ? point[1] : point.value;
+        const x = left + ((elapsed - firstTime) / span) * plotW;
+        const y = yFromValue(value);
+        if (index === 0) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx._prev = { x, y, v: value };
+        } else {
+          const prev = ctx._prev;
+          if (prev) {
+            drawSegment(prev.x, prev.y, prev.v, x, y, value);
+          }
+          ctx._prev = { x, y, v: value };
+        }
+      });
+      ctx._prev = null;
+
+      ctx.fillStyle = '#d8b58a';
+      ctx.font = '12px monospace';
+      ctx.fillText('Value', 10, top + plotH / 2);
+      ctx.fillText('Time (s)', left + plotW / 2 - 24, h - 8);
+
+      ctx.fillStyle = '#8c7553';
+      ctx.font = '11px monospace';
+      const sortedYTicks = yTicks.sort((a, b) => b - a);
+      for (const value of sortedYTicks) {
+        const y = yFromValue(value);
+        const text = formatAxisValue(value);
+        ctx.beginPath(); ctx.moveTo(left - 5, y); ctx.lineTo(left, y); ctx.stroke();
+        ctx.fillText(text, 6, y + 4);
+      }
+      for (let i = 0; i <= tickCount; i++) {
+        const ratio = i / tickCount;
+        const x = left + ratio * plotW;
+        const t = Math.round(span * ratio);
+        ctx.beginPath(); ctx.moveTo(x, top + plotH); ctx.lineTo(x, top + plotH + 5); ctx.stroke();
+        ctx.fillText(`${t}`, x - 10, top + plotH + 20);
+      }
+    }
+
+    async function refresh() {
+      const res = await fetch('/api/status?ts=' + Date.now());
+      const s = await res.json();
+      if (s.graph_points) data = s.graph_points;
+      settings = s;
+      meta.textContent = `${s.mode_label || '---'} • ${s.display_value || '---'} ${s.unit || ''}`;
+      const current = s.graph_display_value != null ? s.graph_display_value : (s.display_value != null ? s.display_value : '---');
+      const min = s.graph_min != null ? Number(s.graph_min).toFixed(s.graph_decimals ?? 3) : '---';
+      const max = s.graph_max != null ? Number(s.graph_max).toFixed(s.graph_decimals ?? 3) : '---';
+      const sample = s.graph_window_seconds != null ? `${s.graph_window_seconds}s` : '---';
+      const visible = s.graph_visible_seconds != null ? `${s.graph_visible_seconds}s` : '---';
+      stats.textContent = `Current: ${current} • Min: ${min} • Max: ${max} • Sample: ${sample} • Visible: ${visible}`;
+      const scaleEl = document.getElementById('scale');
+      if (scaleEl) {
+        const axisBase = Math.max(Math.abs(s.graph_y_min ?? 0), Math.abs(s.graph_y_max ?? 0));
+        let axisFactor = 1;
+        let axisSuffix = '';
+        if (axisBase >= 1e6) {
+          axisFactor = 1e6;
+          axisSuffix = 'M';
+        } else if (axisBase >= 1e3) {
+          axisFactor = 1e3;
+          axisSuffix = 'k';
+        }
+        const yMin = Number.isFinite(s.graph_y_min) ? s.graph_y_min : 0;
+        const yMax = Number.isFinite(s.graph_y_max) ? s.graph_y_max : 0;
+        scaleEl.textContent = `Scale: ${(yMin / axisFactor).toFixed(3)}${axisSuffix} to ${(yMax / axisFactor).toFixed(3)}${axisSuffix}`;
+      }
+      draw();
+    }
+    window.addEventListener('resize', resize);
+    setInterval(refresh, 200);
+    resize();
+    refresh();
+  </script>
+</body>
+
+</html>

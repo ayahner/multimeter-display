@@ -1,0 +1,585 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>SquatchLab OWON XDM1241 Control</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
+      background: #111;
+      color: #eee;
+    }
+
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .header img {
+      height: 48px;
+      width: auto;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 30px;
+    }
+
+    .sub {
+      color: #aaa;
+      margin-bottom: 24px;
+    }
+
+    .topRow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .functionBar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 16px;
+      background: #1b1b1b;
+      border: 1px solid #333;
+      border-radius: 18px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, .35);
+    }
+
+    .settingsGrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background: #1b1b1b;
+      border: 1px solid #333;
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, .35);
+    }
+
+    .reading {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 72px;
+      letter-spacing: -3px;
+      color: #69ff9a;
+      line-height: 1;
+    }
+
+    .unit {
+      font-size: 30px;
+      color: #bafccd;
+      margin-left: 10px;
+    }
+
+    .mode {
+      color: #ddd;
+      font-size: 22px;
+      margin: 14px 0 4px;
+    }
+
+    .row {
+      color: #888;
+      font-family: monospace;
+      margin: 4px 0;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 11px 14px;
+      margin: 6px 6px 6px 0;
+      background: #2a2a2a;
+      color: #eee;
+      cursor: pointer;
+      font-size: 15px;
+    }
+
+    button:hover {
+      background: #3a3a3a;
+    }
+
+    button.active {
+      background: #9b5b00;
+      color: white;
+    }
+
+    .note {
+      margin-top: 12px;
+      color: #ffd27d;
+      min-height: 22px;
+    }
+
+    .err {
+      color: #ff7777;
+      white-space: pre-wrap;
+      margin-top: 10px;
+    }
+
+    .danger {
+      background: #5a1b1b;
+      color: #ffd0d0;
+    }
+
+    .danger:hover {
+      background: #7a2525;
+    }
+
+    .action {
+      background: #16405f;
+      color: #d8f0ff;
+    }
+
+    .action:hover {
+      background: #215a85;
+    }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #2a2a2a;
+      color: #eee;
+      cursor: pointer;
+      border: 1px solid #444;
+    }
+
+    .toggle.on {
+      background: #9b5b00;
+      color: white;
+    }
+
+    select,
+    input {
+      background: #222;
+      color: #eee;
+      border: 1px solid #444;
+      border-radius: 10px;
+      padding: 10px;
+      margin-top: 8px;
+      font-size: 15px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    label {
+      display: block;
+      margin-top: 12px;
+      font-size: 13px;
+      color: #aaa;
+    }
+
+    .inline {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .inline input {
+      width: 110px;
+    }
+
+    a {
+      color: #79b8ff;
+    }
+
+    code {
+      background: #282828;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="header">
+      <a href="https://squatchcode.com" target="_blank" rel="noopener noreferrer">
+        <img src="/images/squatchlab-logo-and-name-320x132.png" alt="SquatchLab logo">
+      </a>
+      <div>
+        <h1>OWON XDM1241 Control</h1>
+      </div>
+    </div>
+    <div class="sub">
+      OBS overlay: <a href="/overlay" target="owon-overlay">/overlay</a> ·
+      Graph: <a href="/graph" target="owon-graph">/graph</a> ·
+      JSON: <a href="/api/status">/api/status</a> ·
+      Log: <code>~/.owon/owon.log</code>
+    </div>
+
+    <div class="topRow">
+      <div class="functionBar">
+        {% for key, mode in modes.items() %}
+        <button id="btn-{{key}}" onclick="setMode('{{key}}')">{{mode.label}}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;">
+      <h2>Meter Controls</h2>
+      <div><span id="display" class="reading">----</span><span id="unit" class="unit"></span></div>
+      <div id="mode" class="mode">---</div>
+      <div class="row">Raw: <span id="raw">---</span></div>
+      <div class="row">Function: <span id="function_raw">---</span></div>
+      <div class="row">Speed: <span id="speed">---</span></div>
+      <div class="row">OWON Range: <span id="range">---</span></div>
+      <div class="row">Graph Display: <span id="graph_display">---</span></div>
+      <div class="row">Port: <span id="port">---</span></div>
+      <div class="row">Device: <span id="identity">---</span></div>
+      <div class="note">Changing function clears the graph and rereads the slow settings once.</div>
+      <button class="action" onclick="rereadSettings()">Reread OWON Settings</button>
+      <button class="danger" onclick="shutdownApp()">Exit App</button>
+      <div id="note" class="note"></div>
+      <div id="error" class="err"></div>
+    </div>
+
+    <div class="settingsGrid">
+      <div class="card">
+        <h2>Overlay Settings</h2>
+        <button class="action" onclick="resetOverlayDefaults()">Default Settings</button>
+        <div class="toggle" id="overlayToggle" onclick="toggleOverlayToggle()">Auto Precision: <span
+            id="overlayToggleLabel">ON</span></div>
+        <label>Precision</label>
+        <div class="inline">
+          <input id="overlayDecimals" type="number" min="0" max="9" step="1" value="3" onchange="saveOverlaySettings()">
+        </div>
+        <div class="note">These settings only affect the digital overlay view.</div>
+      </div>
+
+      <div class="card">
+        <h2>Graph Settings</h2>
+        <button class="action" onclick="resetGraphDefaults()">Default Settings</button>
+        <label>Sample History: <span id="graphWindowSecondsLabel">60</span>s</label>
+        <input id="graphWindowSeconds" type="range" min="0" max="300" step="5" value="60"
+          oninput="updateGraphRangeLabels()" onchange="saveGraphSettings()">
+        <label>Visible Window: <span id="graphVisibleSecondsLabel">30</span>s</label>
+        <input id="graphVisibleSeconds" type="range" min="0" max="60" step="5" value="30"
+          oninput="updateGraphRangeLabels()" onchange="saveGraphSettings()">
+        <label>Graph Precision</label>
+        <div class="inline">
+          <input id="graphDecimals" type="number" min="0" max="9" step="1" value="3" onchange="saveGraphSettings()">
+        </div>
+        <label>Scale Mode</label>
+        <select id="graphRangeMode" onchange="onGraphRangeModeChange()">
+          <option value="auto">Auto Window</option>
+          <option value="fixed">Fixed Range</option>
+          <option value="manual">Manual</option>
+        </select>
+        <div id="graphFixedRangeSection" style="display:none;">
+          <label>Graph Range</label>
+          <select id="graphPreset" onchange="saveGraphSettings()"></select>
+        </div>
+        <div id="graphManualRangeSection" style="display:none;">
+          <label>Manual Min</label>
+          <input id="graphCustomMin" type="number" step="any" onchange="saveGraphSettings()">
+          <label>Manual Max</label>
+          <input id="graphCustomMax" type="number" step="any" onchange="saveGraphSettings()">
+        </div>
+        <button class="toggle" id="graphCenterOnZero" onclick="toggleGraphCenterOnZero()">Center on Zero: <span
+            id="graphCenterOnZeroLabel">OFF</span></button>
+        <div class="inline" style="margin-top:12px; gap:10px;">
+          <button class="action" onclick="resetGraph()">Reset Graph</button>
+          <button class="action" onclick="resetGraphDefaults()">Default Settings</button>
+        </div>
+        <div class="note">Reset Graph only clears the graph window; Reread OWON Settings is separate.</div>
+      </div>
+    </div>
+  </div>
+  <script>
+    window.name = 'owon-control';
+
+    async function setMode(mode) {
+      await fetch('/api/mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode })
+      });
+      await refresh();
+    }
+
+    async function rereadSettings() {
+      await fetch('/api/reread-settings', { method: 'POST' });
+      await refresh();
+    }
+
+    async function resetGraph() {
+      await fetch('/api/reset-graph', { method: 'POST' });
+      await refresh();
+    }
+
+    async function toggleOverlayToggle() {
+      const el = document.getElementById('overlayToggle');
+      const on = !el.classList.contains('on');
+      el.classList.toggle('on', on);
+      document.getElementById('overlayToggleLabel').textContent = on ? 'ON' : 'OFF';
+      await saveOverlaySettings();
+    }
+
+    function onGraphRangeModeChange() {
+      const mode = document.getElementById('graphRangeMode').value;
+      document.getElementById('graphFixedRangeSection').style.display = mode === 'fixed' ? 'block' : 'none';
+      document.getElementById('graphManualRangeSection').style.display = mode === 'manual' ? 'block' : 'none';
+      saveGraphSettings();
+    }
+
+    function toggleGraphCenterOnZero() {
+      const el = document.getElementById('graphCenterOnZero');
+      if (el.disabled) return;
+      const on = !el.classList.contains('on');
+      el.classList.toggle('on', on);
+      document.getElementById('graphCenterOnZeroLabel').textContent = on ? 'ON' : 'OFF';
+      saveGraphSettings();
+    }
+
+    async function saveOverlaySettings() {
+      const on = document.getElementById('overlayToggle').classList.contains('on');
+      const body = {
+        auto_decimals: on,
+        decimals: document.getElementById('overlayDecimals').value,
+      };
+      await fetch('/api/overlay-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      await refresh();
+    }
+
+    async function saveGraphSettings() {
+      updateGraphRangeLabels();
+      const body = {
+        range_mode: document.getElementById('graphRangeMode').value,
+        range_key: document.getElementById('graphPreset') ? document.getElementById('graphPreset').value : undefined,
+        custom_min: Number(document.getElementById('graphCustomMin').value),
+        custom_max: Number(document.getElementById('graphCustomMax').value),
+        window_seconds: Number(document.getElementById('graphWindowSeconds').value),
+        visible_seconds: Number(document.getElementById('graphVisibleSeconds').value),
+        auto_decimals: false,
+        decimals: Number(document.getElementById('graphDecimals').value),
+        center_on_zero: document.getElementById('graphCenterOnZero').classList.contains('on'),
+      };
+      await fetch('/api/graph-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      await refresh();
+    }
+
+    async function resetOverlayDefaults() {
+      await fetch('/api/overlay-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auto_decimals: true, decimals: 3 })
+      });
+      await refresh();
+    }
+
+    async function resetGraphDefaults() {
+      await fetch('/api/graph-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ range_mode: 'auto', custom_min: 0, custom_max: 100000, window_seconds: 60, visible_seconds: 30, auto_decimals: false, decimals: 3, center_on_zero: false })
+      });
+      await refresh();
+    }
+
+    async function shutdownApp() {
+      const ok = confirm('Exit the OWON meter app?');
+      if (!ok) return;
+      document.body.innerHTML = '<div style="font-family:sans-serif;padding:40px;color:#eee;background:#111;height:100vh"><h1>OWON app exited</h1><p>You can close this window.</p></div>';
+      await fetch('/api/shutdown', { method: 'POST' });
+    }
+
+    function formatValueLabel(value) {
+      const absValue = Math.abs(value);
+      if (absValue >= 1000000 && absValue % 1000000 === 0) {
+        return `${value / 1000000}M`;
+      }
+      if (absValue >= 1000 && absValue % 1000 === 0) {
+        return `${value / 1000}k`;
+      }
+      return String(value);
+    }
+
+    const editingFields = new Set([
+      'overlayDecimals',
+      'graphDecimals',
+      'graphWindowSeconds',
+      'graphVisibleSeconds',
+      'graphCustomMin',
+      'graphCustomMax',
+      'graphPreset',
+      'graphRangeMode',
+      'graphCenterOnZero',
+    ]);
+
+    function isEditing() {
+      return document.activeElement && editingFields.has(document.activeElement.id);
+    }
+
+    function updateGraphRangeLabels() {
+      const windowEl = document.getElementById('graphWindowSeconds');
+      const visibleEl = document.getElementById('graphVisibleSeconds');
+      const windowSeconds = Math.max(0, Number(windowEl.value || 0));
+      const snappedWindow = Math.round(windowSeconds / 5) * 5;
+      if (snappedWindow !== windowSeconds) {
+        windowEl.value = String(snappedWindow);
+      }
+      const effectiveWindow = Math.max(0, Number(windowEl.value || 0));
+
+      visibleEl.max = String(effectiveWindow);
+      const visibleRaw = Math.max(0, Number(visibleEl.value || 0));
+      let snappedVisible = Math.round(visibleRaw / 5) * 5;
+      if (snappedVisible > effectiveWindow) {
+        snappedVisible = effectiveWindow;
+      }
+      if (snappedVisible !== visibleRaw) {
+        visibleEl.value = String(snappedVisible);
+      }
+
+      const windowLabel = document.getElementById('graphWindowSecondsLabel');
+      const visibleLabel = document.getElementById('graphVisibleSecondsLabel');
+      if (windowLabel) windowLabel.textContent = String(effectiveWindow);
+      if (visibleLabel) visibleLabel.textContent = String(Number(visibleEl.value || 0));
+    }
+
+    function updateGraphCustomLabels() {
+      const mode = document.getElementById('graphRangeMode').value;
+      const minEl = document.getElementById('graphCustomMin');
+      const maxEl = document.getElementById('graphCustomMax');
+      const isManual = mode === 'manual';
+      minEl.disabled = !isManual;
+      maxEl.disabled = !isManual;
+      minEl.style.opacity = isManual ? '1' : '0.5';
+      maxEl.style.opacity = isManual ? '1' : '0.5';
+
+      const minValue = Number(minEl.value);
+      const maxValue = Number(maxEl.value);
+      if (maxValue <= minValue) {
+        maxEl.value = String(minValue + 1);
+      }
+    }
+
+    function updatePresetOptions(opts, selected) {
+      const sel = document.getElementById('graphPreset');
+      if (!sel) return;
+      if (document.activeElement === sel) return;
+
+      const normalized = JSON.stringify((opts || []).map((opt) => ({ key: opt.key, label: opt.label })));
+      if (sel.dataset.lastOptionsJson === normalized) {
+        if (selected && sel.value !== selected) {
+          sel.value = selected;
+        }
+        return;
+      }
+
+      sel.innerHTML = '';
+      for (const opt of opts || []) {
+        const o = document.createElement('option');
+        o.value = opt.key;
+        o.textContent = opt.label;
+        if (opt.key === selected) o.selected = true;
+        sel.appendChild(o);
+      }
+      sel.dataset.lastOptionsJson = normalized;
+    }
+
+    function syncSettings(s) {
+      const overlayOn = !!s.overlay_auto_decimals;
+      const graphMode = s.graph_range_mode || 'auto';
+      document.getElementById('overlayToggle').classList.toggle('on', overlayOn);
+      document.getElementById('overlayToggleLabel').textContent = overlayOn ? 'ON' : 'OFF';
+
+      if (!isEditing() || document.activeElement.id !== 'overlayDecimals') {
+        document.getElementById('overlayDecimals').value = s.overlay_decimals ?? 3;
+      }
+      if (!isEditing() || ![
+        'graphDecimals',
+        'graphWindowSeconds',
+        'graphVisibleSeconds',
+        'graphCustomMin',
+        'graphCustomMax',
+        'graphRangeMode',
+        'graphPreset',
+      ].includes(document.activeElement.id)) {
+        const windowSeconds = Math.max(0, s.graph_window_seconds ?? 60);
+        const visibleSeconds = Math.min(Math.max(0, s.graph_visible_seconds ?? 30), windowSeconds);
+        document.getElementById('graphDecimals').value = s.graph_decimals ?? 3;
+        document.getElementById('graphWindowSeconds').value = windowSeconds;
+        document.getElementById('graphVisibleSeconds').max = String(windowSeconds);
+        document.getElementById('graphVisibleSeconds').value = visibleSeconds;
+        document.getElementById('graphCustomMin').value = Number(s.graph_custom_min ?? 0);
+        document.getElementById('graphCustomMax').value = Number(s.graph_custom_max ?? 100000);
+        const centerBtn = document.getElementById('graphCenterOnZero');
+        const centerOn = !!s.graph_center_on_zero;
+        centerBtn.classList.toggle('on', centerOn);
+        document.getElementById('graphCenterOnZeroLabel').textContent = centerOn ? 'ON' : 'OFF';
+        document.getElementById('graphRangeMode').value = graphMode;
+      }
+      const centerBtn = document.getElementById('graphCenterOnZero');
+      centerBtn.disabled = !s.graph_center_on_zero_allowed;
+      if (!s.graph_center_on_zero_allowed) {
+        centerBtn.classList.remove('on');
+        document.getElementById('graphCenterOnZeroLabel').textContent = 'OFF';
+      }
+      updatePresetOptions(s.graph_view_options, s.graph_range_key);
+      document.getElementById('graphFixedRangeSection').style.display = graphMode === 'fixed' ? 'block' : 'none';
+      document.getElementById('graphManualRangeSection').style.display = graphMode === 'manual' ? 'block' : 'none';
+      window.currentGraphUnit = s.base_unit || '';
+      updateGraphRangeLabels();
+      updateGraphCustomLabels();
+    }
+
+    async function refresh() {
+      const res = await fetch('/api/status?ts=' + Date.now());
+      const s = await res.json();
+
+      document.getElementById('display').textContent = s.display_value;
+      document.getElementById('unit').textContent = s.unit;
+      document.getElementById('mode').textContent = s.mode_label;
+      document.getElementById('raw').textContent = s.raw || '---';
+      document.getElementById('function_raw').textContent = s.function_raw || '---';
+      document.getElementById('speed').textContent = s.speed_label || '---';
+      document.getElementById('range').textContent = (s.range_label || '---') + (s.range_raw ? ' (' + s.range_raw + ')' : '');
+      document.getElementById('graph_display').textContent = s.graph_display_label || '---';
+      document.getElementById('port').textContent = s.port || '---';
+      document.getElementById('identity').textContent = s.identity || '---';
+      document.getElementById('note').textContent = s.safety_note || '';
+      document.getElementById('error').textContent = s.error ? ('Error: ' + s.error) : '';
+
+      syncSettings(s);
+
+      document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      const active = document.getElementById('btn-' + s.mode_key);
+      if (active) active.classList.add('active');
+    }
+
+    setInterval(refresh, 250);
+    refresh();
+  </script>
+</body>
+
+</html>
